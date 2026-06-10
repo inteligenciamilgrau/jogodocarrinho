@@ -39,6 +39,10 @@ Padrão de nomes: tudo minúsculo, com underscore. Exemplos: `carrinho_gpt_5.htm
 
 Salve como `jogos/carrinho_<seu_modelo>.html`, **codificação UTF-8**.
 
+Se carregar bibliotecas via CDN, inclua verificação de integridade (SRI):
+`<script src="..." integrity="sha512-..." crossorigin="anonymous"></script>` —
+o hash oficial fica na página da biblioteca no cdnjs (botão "Copy Script Tag with SRI").
+
 > ⚠️ **Cuidado com encoding no Windows:** se manipular o arquivo via PowerShell 5.1,
 > `Get-Content`/`Out-File` corrompem emojis e acentos (mojibake `ðŸ`, `Ã©`...).
 > Use `[IO.File]::ReadAllText($caminho, [Text.Encoding]::UTF8)` e
@@ -73,14 +77,18 @@ Abra o `index.html` e localize o array `GAMES` (marcado com o comentário
   arquivo: 'jogos/carrinho_<seu_modelo>.html', // caminho do seu jogo
   capa: 'capas/carrinho_<seu_modelo>.png',     // caminho do seu print 1280×720
   titulo: 'Carrinho 3D — <subtítulo curto e chamativo>',
+  descricao: '<1 a 2 frases vendendo o seu jogo>',
   modelo: '<Nome do Modelo>',                  // ex.: 'GPT-5', 'Gemini 3 Pro', 'Claude Opus 4.8'
-  sigla: '<2-3 letras>',                       // aparece no avatar redondo, ex.: 'G5'
+  sigla: '<2-3 letras>',                       // aparece no avatar, ex.: 'G5'
   corAvatar: 'linear-gradient(135deg,<cor1>,<cor2>)', // cores que identifiquem você
   data: '<mês de ano>',                        // ex.: 'julho de 2026'
-  tags: '<3 destaques técnicos separados por · >',
+  tags: ['3D', '<destaque>', '<destaque>'],    // lista; os 3 primeiros aparecem no cartão
   selo: '3D'                                   // etiqueta no canto da capa
 },
 ```
+
+> 🔒 Todos os campos passam por **escape de HTML** na renderização — escreva apenas
+> texto puro neles (nada de tags HTML; não vão funcionar e o PR será recusado).
 
 **Não precisa mexer em mais nada**: a grade renderiza os cartões a partir do array e
 completa sozinha a última linha com cartões "🔜 Em breve" (constante `VAGAS_POR_LINHA = 3`).
@@ -92,11 +100,12 @@ completa sozinha a última linha com cartões "🔜 Em breve" (constante `VAGAS_
 | `arquivo`   | sim         | Caminho do jogo relativo à raiz (`jogos/...`)                     |
 | `capa`      | sim         | Caminho do PNG 1280×720 relativo à raiz (`capas/...`)             |
 | `titulo`    | sim         | Título do cartão (1 linha, como título de vídeo)                  |
-| `modelo`    | sim         | Nome do modelo de IA que criou o jogo (vira "criado por **X**")   |
-| `sigla`     | sim         | Iniciais para o avatar circular (2–3 caracteres)                  |
+| `descricao` | sim         | 1–2 frases sobre o jogo (aparece no corpo do cartão)              |
+| `modelo`    | sim         | Nome do modelo de IA que criou o jogo                             |
+| `sigla`     | sim         | Iniciais para o avatar (2–3 caracteres)                           |
 | `corAvatar` | sim         | CSS de fundo do avatar (gradiente recomendado)                    |
 | `data`      | sim         | Mês/ano de criação, por extenso em pt-BR                          |
-| `tags`      | sim         | Destaques técnicos curtos, separados por " · "                    |
+| `tags`      | sim         | Lista de destaques técnicos (ex.: `['3D','A*','Splines']`)        |
 | `selo`      | sim         | Etiqueta sobre a capa (use `'3D'` salvo bom motivo)               |
 
 ## Fluxo no GitHub (projeto aberto)
