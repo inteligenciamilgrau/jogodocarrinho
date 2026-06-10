@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏎️ Simulador de Carro 3D</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#000;font-family:'Segoe UI',Arial,sans-serif;user-select:none}
+  canvas{display:block}
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  #hud .panel{pointer-events:auto}
+  /* placar */
+  #score{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;padding:8px 22px;border-radius:12px;font-size:22px;font-weight:700;letter-spacing:1px;border:1px solid rgba(255,255,255,.25);white-space:nowrap}
+  #score .p{color:#4da6ff} #score .a{color:#ff6b6b}
+  /* notificacoes */
+  #notify{position:absolute;top:60px;left:50%;transform:translateX(-50%);text-align:center;width:640px;max-width:90vw}
+  .msg{display:block;background:rgba(0,0,0,.65);color:#ffd54a;margin:4px auto;padding:6px 16px;border-radius:8px;font-size:16px;font-weight:600;width:fit-content;animation:fadeMsg 3.5s forwards}
+  @keyframes fadeMsg{0%{opacity:0;transform:translateY(-8px)}8%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0}}
+  /* barras de energia */
+  .energy{position:absolute;top:14px;width:240px}
+  .energy .lbl{color:#fff;font-size:13px;font-weight:700;margin-bottom:3px;text-shadow:0 1px 3px #000}
+  .energy .bar{position:relative;height:18px;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.35);border-radius:10px;overflow:hidden}
+  .energy .fill{height:100%;width:0%;transition:width .35s}
+  .energy .ticks{position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 2px),rgba(0,0,0,.5) calc(10% - 2px),rgba(0,0,0,.5) 10%)}
+  #energyP{left:16px} #energyP .fill{background:linear-gradient(90deg,#1565c0,#42a5f5)}
+  #energyA{right:16px} #energyA .lbl{text-align:right} #energyA .fill{background:linear-gradient(90deg,#b71c1c,#ef5350)}
+  /* velocimetro */
+  #gauge{position:absolute;right:16px;bottom:16px}
+  /* painel de audio */
+  #audio{position:absolute;left:16px;bottom:16px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:10px 14px;color:#fff;font-size:14px}
+  #audio .row{display:flex;align-items:center;gap:6px;margin:6px 0}
+  #audio .name{width:74px;font-weight:600}
+  #audio button{background:#333;color:#fff;border:1px solid #666;border-radius:6px;width:30px;height:26px;cursor:pointer;font-size:14px;line-height:1}
+  #audio button:hover{background:#555}
+  #audio input[type=range]{width:110px;accent-color:#ffd54a}
+  #audio .pct{width:42px;text-align:right;font-variant-numeric:tabular-nums}
+  /* mini tela com a visao da IA (modo voo livre) */
+  #pip{position:absolute;display:none;border:2px solid rgba(255,255,255,.55);border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.55)}
+  #pip .tag{position:absolute;top:6px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px}
+  /* menu de cameras (mostrado na visao aerea) */
+  #camhelp{position:absolute;display:none;left:16px;top:70px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:10px 14px;color:#fff;font-size:13px;line-height:1.7}
+  #camhelp b{display:block;margin-bottom:4px}
+  #camhelp .k{display:inline-block;background:#fff;color:#000;font-weight:700;border-radius:5px;padding:0 7px;margin-right:7px}
+  #camhelp .sub{margin-top:6px;color:#cfd8dc;font-size:11.5px;line-height:1.5}
+  /* overlay inicio / fim */
+  #overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,20,.55);color:#fff;text-align:center}
+  #overlay h1{font-size:44px;margin:0 0 10px;text-shadow:0 3px 12px #000}
+  #overlay .win{font-size:40px;margin:0 0 14px;color:#ffd54a;text-shadow:0 3px 12px #000}
+  #overlay .ctrl{font-size:16px;line-height:1.8;color:#cfd8dc;background:rgba(0,0,0,.45);padding:12px 28px;border-radius:12px;margin-bottom:22px}
+  #overlay .space{font-size:24px;font-weight:700;color:#ffd54a;animation:blink 1.1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="score">🚙 VOCÊ <span class="p" id="scoreP">0</span> &nbsp;×&nbsp; <span class="a" id="scoreA">0</span> IA 🤖</div>
+  <div id="notify"></div>
+  <div class="energy" id="energyP"><div class="lbl">🚙 VOCÊ</div><div class="bar"><div class="fill" id="fillP"></div><div class="ticks"></div></div></div>
+  <div class="energy" id="energyA"><div class="lbl">IA 🤖</div><div class="bar"><div class="fill" id="fillA"></div><div class="ticks"></div></div></div>
+  <canvas id="gauge" width="210" height="160"></canvas>
+  <div id="audio" class="panel">
+    <div class="row"><span class="name">🎵 Música</span><button id="muteM">🔇</button><button id="minusM">−</button><input type="range" id="volM" min="0" max="100" value="50"><button id="plusM">+</button><span class="pct" id="pctM">50%</span></div>
+    <div class="row"><span class="name">🔊 Efeitos</span><button id="muteS">🔊</button><button id="minusS">−</button><input type="range" id="volS" min="0" max="100" value="70"><button id="plusS">+</button><span class="pct" id="pctS">70%</span></div>
+  </div>
+  <div id="pip"><span class="tag">👁️ Visão da IA (C liga/desliga)</span></div>
+  <div id="camhelp">
+    <b>📷 Câmeras</b>
+    <div><span class="k">1</span> dirigir o seu carro</div>
+    <div><span class="k">2</span> ver o carro da IA</div>
+    <div><span class="k">3</span> voo livre (atual)</div>
+    <div class="sub">WASD/setas voam · SHIFT sobe · ESPAÇO desce<br>mouse gira o olhar · ESC solta o mouse · C mini tela</div>
+  </div>
+  <div id="overlay" class="panel">
+    <h1>🏎️ Simulador de Carro 3D</h1>
+    <div class="ctrl">🕹️ Setas ou WASD para dirigir<br>🪙 Colete mais moedas que a IA — sem limite!<br>💥 Cuidado com árvores, montanhas e o trem!<br>👀 O leque verde/vermelho é o sensor da IA — ele encolhe nas manobras lentas<br>📷 Câmeras: 1 = seu carro · 2 = carro da IA · 3 = voo livre (mouse gira o olhar, SHIFT sobe, ESPAÇO desce, ESC solta o mouse, C = mini tela da IA)</div>
+    <div class="space" id="spaceMsg">Pressione ESPAÇO para iniciar (e reiniciar)</div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ================= CONFIG ================= */
+const WORLD = 200;       // metade do tamanho do chao
+const BOUND = 160;       // limite dirigivel
+const TRAIN_R = 30;      // raio do trilho do trem
+const ROAD_R = 70;       // raio da estrada
+const COIN_COUNT = 8;
+const SENSOR = { rays: 11, spread: Math.PI * 0.45, lenMin: 4.5, lenK: 0.55 }; // leque frontal ADAPTATIVO: encolhe em baixa velocidade
+const WHISK = { angles: [Math.PI * 0.34, Math.PI * 0.5], lenMin: 2.4, lenK: 0.16 }; // bigodes laterais (~61 e 90 graus de cada lado)
+const FAN_TOTAL = SENSOR.rays + WHISK.angles.length * 2; // total de raios do leque
+const AI_MAX = 26; // velocidade maxima da IA
+
+/* ================= ESTADO ================= */
+let state = 'menu'; // menu | playing | over
+let scoreP = 0, scoreA = 0;
+
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function normA(a){ while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+
+/* ================= CENA ================= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ecbe8);
+scene.fog = new THREE.Fog(0x8ecbe8, 160, 460);
+const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 1200);
+camera.rotation.order = 'YXZ'; // yaw/pitch independentes para o voo livre
+camera.position.set(0, 8, 85);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  layoutPip();
+});
+
+const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x3a5f2a, 0.9);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff3d6, 1.0);
+sun.position.set(80, 130, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -170; sun.shadow.camera.right = 170;
+sun.shadow.camera.top = 170; sun.shadow.camera.bottom = -170;
+sun.shadow.camera.near = 10; sun.shadow.camera.far = 400;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+/* chao */
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(WORLD * 2 + 120, WORLD * 2 + 120),
+  new THREE.MeshLambertMaterial({ color: 0x4caf50 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+/* estrada circular */
+const road = new THREE.Mesh(
+  new THREE.RingGeometry(ROAD_R - 5, ROAD_R + 5, 96),
+  new THREE.MeshLambertMaterial({ color: 0x37474f })
+);
+road.rotation.x = -Math.PI / 2;
+road.position.y = 0.03;
+road.receiveShadow = true;
+scene.add(road);
+const dashMat = new THREE.MeshBasicMaterial({ color: 0xffeb3b });
+for (let i = 0; i < 40; i++) {
+  const a = i / 40 * Math.PI * 2;
+  const d = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 2.6), dashMat);
+  d.rotation.set(-Math.PI / 2, 0, a - Math.PI / 2);
+  d.position.set(Math.sin(a) * ROAD_R, 0.05, Math.cos(a) * ROAD_R);
+  scene.add(d);
+}
+
+/* trilho do trem (centro do mapa) */
+const railMat = new THREE.MeshStandardMaterial({ color: 0x607d8b, metalness: 0.8, roughness: 0.4 });
+[TRAIN_R - 0.7, TRAIN_R + 0.7].forEach(r => {
+  const rail = new THREE.Mesh(new THREE.TorusGeometry(r, 0.12, 6, 80), railMat);
+  rail.rotation.x = -Math.PI / 2;
+  rail.position.y = 0.22;
+  scene.add(rail);
+});
+const sleeperMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+for (let i = 0; i < 44; i++) {
+  const a = i / 44 * Math.PI * 2;
+  const s = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.15, 0.5), sleeperMat);
+  s.position.set(Math.sin(a) * TRAIN_R, 0.1, Math.cos(a) * TRAIN_R);
+  s.rotation.y = a - Math.PI / 2;
+  scene.add(s);
+}
+
+/* trem */
+const train = { angle: 0, speed: 0.22, cars: [] };
+const trainCircles = [];
+function makeTrainCar(isLoco) {
+  const g = new THREE.Group();
+  const color = isLoco ? 0xc62828 : [0x6d4c41, 0x455a64, 0x2e7d32][train.cars.length % 3];
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.0, 5.2),
+    new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.6 }));
+  body.position.y = 1.7;
+  body.castShadow = true;
+  g.add(body);
+  if (isLoco) {
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.1, 1.6),
+      new THREE.MeshStandardMaterial({ color: 0x8e0000 }));
+    cab.position.set(0, 3.2, -1.6);
+    cab.castShadow = true;
+    g.add(cab);
+    const chim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 1.2, 10),
+      new THREE.MeshStandardMaterial({ color: 0x212121 }));
+    chim.position.set(0, 3.2, 1.7);
+    g.add(chim);
+  }
+  const wMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+  [[-1.1, 1.6], [1.1, 1.6], [-1.1, -1.6], [1.1, -1.6]].forEach(([wx, wz]) => {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 12), wMat);
+    w.rotation.z = Math.PI / 2;
+    w.position.set(wx, 0.5, wz);
+    g.add(w);
+  });
+  scene.add(g);
+  return g;
+}
+for (let i = 0; i < 4; i++) {
+  train.cars.push(makeTrainCar(i === 0));
+  trainCircles.push({ x: 0, z: 0, r: 3.4 });
+}
+function updateTrain(dt) {
+  train.angle += train.speed * dt;
+  train.cars.forEach((m, i) => {
+    const a = train.angle - i * 0.21;
+    const x = Math.sin(a) * TRAIN_R, z = Math.cos(a) * TRAIN_R;
+    m.position.set(x, 0, z);
+    m.rotation.y = a + Math.PI / 2;
+    trainCircles[i].x = x;
+    trainCircles[i].z = z;
+  });
+}
+
+/* montanhas */
+const staticObstacles = [];
+function addMountain(x, z, baseR, h, isObstacle) {
+  const rock = new THREE.Mesh(new THREE.ConeGeometry(baseR, h, 7),
+    new THREE.MeshStandardMaterial({ color: 0x6d4c41, flatShading: true, roughness: 1 }));
+  rock.position.set(x, h / 2, z);
+  rock.castShadow = true;
+  scene.add(rock);
+  const hs = h * 0.34;
+  const snow = new THREE.Mesh(new THREE.ConeGeometry(baseR * (hs / h) * 1.15, hs, 7),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 1 }));
+  snow.position.set(x, h - hs / 2 + 0.05, z);
+  scene.add(snow);
+  if (isObstacle) staticObstacles.push({ x, z, r: baseR * 0.8 });
+}
+[[95, 30, 14, 30], [-85, -60, 12, 26], [55, -110, 13, 28], [-100, 80, 12, 25], [50, 20, 9, 18], [-45, -35, 9, 17]]
+  .forEach(([x, z, r, h]) => addMountain(x, z, r, h, true));
+for (let i = 0; i < 16; i++) {
+  const a = i / 16 * Math.PI * 2 + 0.13;
+  const R = 195 + Math.random() * 30;
+  const x = Math.sin(a) * R, z = Math.cos(a) * R;
+  const r = 18 + Math.random() * 14;
+  // perto das diagonais a montanha do cenario invade a area dirigivel: vira obstaculo solido
+  const dx = x - clamp(x, -BOUND, BOUND), dz = z - clamp(z, -BOUND, BOUND);
+  addMountain(x, z, r, 40 + Math.random() * 30, Math.hypot(dx, dz) < r * 0.8 + 2);
+}
+
+/* arvores */
+const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6d4c41 });
+const leafMat = new THREE.MeshLambertMaterial({ color: 0x2e7d32 });
+const leafMat2 = new THREE.MeshLambertMaterial({ color: 0x388e3c });
+function addTree(x, z, s) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25 * s, 0.38 * s, 1.8 * s, 8), trunkMat);
+  trunk.position.y = 0.9 * s;
+  trunk.castShadow = true;
+  g.add(trunk);
+  const l1 = new THREE.Mesh(new THREE.ConeGeometry(1.5 * s, 2.6 * s, 8), Math.random() < 0.5 ? leafMat : leafMat2);
+  l1.position.y = 2.7 * s;
+  l1.castShadow = true;
+  g.add(l1);
+  const l2 = new THREE.Mesh(new THREE.ConeGeometry(1.1 * s, 2.0 * s, 8), l1.material);
+  l2.position.y = 3.8 * s;
+  l2.castShadow = true;
+  g.add(l2);
+  g.position.set(x, 0, z);
+  scene.add(g);
+  staticObstacles.push({ x, z, r: 1.0 * s });
+}
+function treeSpotOk(x, z) {
+  const d = Math.hypot(x, z);
+  if (d > 23 && d < 39) return false;             // faixa do trilho do trem
+  if (Math.abs(d - ROAD_R) < 7) return false;     // estrada
+  if (Math.hypot(x, z - 70) < 14) return false;   // spawn jogador
+  if (Math.hypot(x, z + 70) < 14) return false;   // spawn IA
+  for (const o of staticObstacles) if (Math.hypot(x - o.x, z - o.z) < o.r + 4.5) return false;
+  return true;
+}
+let placed = 0, guard = 0;
+while (placed < 220 && guard++ < 12000) {
+  const x = (Math.random() * 2 - 1) * 155, z = (Math.random() * 2 - 1) * 155;
+  if (treeSpotOk(x, z)) { addTree(x, z, 0.8 + Math.random() * 0.8); placed++; }
+}
+
+/* ================= NAVEGACAO (A*) ================= */
+/* grade do mundo: a IA planeja a rota ate a moeda JA desviando de arvores e montanhas */
+const CELL = 4;
+const GN = Math.floor((BOUND * 2) / CELL); // 80x80 celulas
+const navBlocked = new Uint8Array(GN * GN);
+const navCost = new Float32Array(GN * GN);
+const worldToCell = v => clamp(Math.floor((v + BOUND) / CELL), 0, GN - 1);
+const cellToWorld = ci => ci * CELL - BOUND + CELL / 2;
+function buildNavGrid() {
+  for (let cz = 0; cz < GN; cz++) for (let cx = 0; cx < GN; cx++) {
+    const x = cellToWorld(cx), z = cellToWorld(cz);
+    const i = cz * GN + cx;
+    navBlocked[i] = 0;
+    navCost[i] = 1;
+    const d = Math.hypot(x, z);
+    if (d > 24 && d < 36) navCost[i] = 6; // faixa do trem: so cruza se valer a pena
+    for (const o of staticObstacles) {
+      const dd = Math.hypot(x - o.x, z - o.z);
+      if (dd < o.r + 2.4) { navBlocked[i] = 1; break; }
+      if (dd < o.r + 5) navCost[i] = Math.max(navCost[i], 3); // passa mas evita raspar
+    }
+  }
+}
+buildNavGrid();
+function gridLineFree(p, q) {
+  const d = Math.hypot(q.x - p.x, q.z - p.z);
+  const n = Math.max(1, Math.ceil(d / 2));
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    if (navBlocked[worldToCell(p.z + (q.z - p.z) * t) * GN + worldToCell(p.x + (q.x - p.x) * t)]) return false;
+  }
+  return true;
+}
+function findPath(sx, sz, tx, tz) {
+  const free = (cx, cz) => cx >= 0 && cz >= 0 && cx < GN && cz < GN && !navBlocked[cz * GN + cx];
+  const nearFree = (cx, cz) => {
+    if (free(cx, cz)) return [cx, cz];
+    for (let r = 1; r < 7; r++)
+      for (let dz = -r; dz <= r; dz++)
+        for (let dx = -r; dx <= r; dx++)
+          if (Math.max(Math.abs(dx), Math.abs(dz)) === r && free(cx + dx, cz + dz)) return [cx + dx, cz + dz];
+    return null;
+  };
+  const s = nearFree(worldToCell(sx), worldToCell(sz));
+  const t = nearFree(worldToCell(tx), worldToCell(tz));
+  if (!s || !t) return null;
+  const start = s[1] * GN + s[0], goal = t[1] * GN + t[0];
+  const N = GN * GN;
+  const g = new Float32Array(N).fill(1e9);
+  const from = new Int32Array(N).fill(-1);
+  const closed = new Uint8Array(N);
+  const hkey = new Float32Array(N);
+  const heap = [];
+  const hf = i => {
+    const dx = Math.abs((i % GN) - t[0]), dz = Math.abs(((i / GN) | 0) - t[1]);
+    return dx + dz + (Math.SQRT2 - 2) * Math.min(dx, dz);
+  };
+  const hpush = (i, k) => {
+    hkey[i] = k;
+    heap.push(i);
+    let c = heap.length - 1;
+    while (c > 0) {
+      const p = (c - 1) >> 1;
+      if (hkey[heap[p]] <= hkey[heap[c]]) break;
+      const tmp = heap[p]; heap[p] = heap[c]; heap[c] = tmp;
+      c = p;
+    }
+  };
+  const hpop = () => {
+    const top = heap[0], last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let c = 0;
+      for (;;) {
+        const l = 2 * c + 1, r = l + 1;
+        let m = c;
+        if (l < heap.length && hkey[heap[l]] < hkey[heap[m]]) m = l;
+        if (r < heap.length && hkey[heap[r]] < hkey[heap[m]]) m = r;
+        if (m === c) break;
+        const tmp = heap[m]; heap[m] = heap[c]; heap[c] = tmp;
+        c = m;
+      }
+    }
+    return top;
+  };
+  g[start] = 0;
+  hpush(start, hf(start));
+  let found = false;
+  while (heap.length) {
+    const cur = hpop();
+    if (cur === goal) { found = true; break; }
+    if (closed[cur]) continue;
+    closed[cur] = 1;
+    const cx = cur % GN, cz = (cur / GN) | 0;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dz) continue;
+      const nx = cx + dx, nz = cz + dz;
+      if (nx < 0 || nz < 0 || nx >= GN || nz >= GN) continue;
+      const ni = nz * GN + nx;
+      if (navBlocked[ni] || closed[ni]) continue;
+      if (dx && dz && (navBlocked[cz * GN + nx] || navBlocked[nz * GN + cx])) continue; // nao corta quina
+      const ng = g[cur] + (dx && dz ? Math.SQRT2 : 1) * (navCost[ni] + navCost[cur]) * 0.5;
+      if (ng < g[ni]) { g[ni] = ng; from[ni] = cur; hpush(ni, ng + hf(ni)); }
+    }
+  }
+  if (!found) return null;
+  const pts = [];
+  for (let i = goal; i !== -1; i = from[i]) pts.push({ x: cellToWorld(i % GN), z: cellToWorld((i / GN) | 0) });
+  pts.reverse();
+  // simplificacao: une trechos consecutivos com linha de visao livre
+  const out = [pts[0]];
+  let a = 0;
+  while (a < pts.length - 1) {
+    let b = a + 1;
+    while (b + 1 < pts.length && gridLineFree(pts[a], pts[b + 1])) b++;
+    out.push(pts[b]);
+    a = b;
+  }
+  out.push({ x: tx, z: tz }); // termina exatamente na moeda
+  return out;
+}
+/* linha de debug: mostra a rota planejada da IA */
+const pathLineGeo = new THREE.BufferGeometry();
+pathLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(256 * 3), 3));
+pathLineGeo.setDrawRange(0, 0);
+const pathLine = new THREE.Line(pathLineGeo, new THREE.LineBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.75 }));
+pathLine.frustumCulled = false;
+scene.add(pathLine);
+function updatePathLine(path, sx, sz) {
+  const pa = pathLineGeo.attributes.position;
+  let n = 0;
+  if (path && path.length) {
+    pa.setXYZ(n++, sx, 0.4, sz);
+    for (const p of path) {
+      if (n >= 256) break;
+      pa.setXYZ(n++, p.x, 0.4, p.z);
+    }
+  }
+  pathLineGeo.setDrawRange(0, n);
+  pa.needsUpdate = true;
+}
+
+/* ---- spline Catmull-Rom centripeta: transforma os waypoints do A* em curva continua ---- */
+const mixP = (a, b, u) => ({ x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u });
+function smoothPath(pts) {
+  if (!pts) return null;
+  // remove pontos quase duplicados (estragam a parametrizacao da spline)
+  const P = [pts[0]];
+  for (const p of pts) if (Math.hypot(p.x - P[P.length - 1].x, p.z - P[P.length - 1].z) > 0.6) P.push(p);
+  P[P.length - 1] = pts[pts.length - 1]; // garante que a rota termina exatamente na moeda
+  if (P.length < 3) return P;
+  const out = [P[0]];
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+    // parametrizacao centripeta (raiz da distancia) evita lacos e overshoot da spline uniforme
+    const t1 = Math.max(0.05, Math.sqrt(Math.hypot(p1.x - p0.x, p1.z - p0.z)));
+    const t2 = t1 + Math.max(0.05, Math.sqrt(Math.hypot(p2.x - p1.x, p2.z - p1.z)));
+    const t3 = t2 + Math.max(0.05, Math.sqrt(Math.hypot(p3.x - p2.x, p3.z - p2.z)));
+    const n = Math.max(2, Math.ceil(Math.hypot(p2.x - p1.x, p2.z - p1.z) / 2.2));
+    for (let j = 1; j <= n; j++) {
+      const t = t1 + (t2 - t1) * j / n;
+      const A1 = mixP(p0, p1, t / t1);                    // piramide de Barry-Goldman
+      const A2 = mixP(p1, p2, (t - t1) / (t2 - t1));
+      const A3 = mixP(p2, p3, (t - t2) / (t3 - t2));
+      const B1 = mixP(A1, A2, t / t2);
+      const B2 = mixP(A2, A3, (t - t1) / (t3 - t1));
+      const q = mixP(B1, B2, (t - t1) / (t2 - t1));
+      // seguranca: se a curva invadir celula bloqueada, recua para a reta original
+      out.push(navBlocked[worldToCell(q.z) * GN + worldToCell(q.x)] ? mixP(p1, p2, j / n) : q);
+    }
+  }
+  return out;
+}
+/* ponto-guia na spline (pure pursuit): ancora no ponto mais proximo e olha Ld metros a frente */
+function pathLookahead(c, Ld) {
+  const sp = c.path;
+  let best = c.pathIdx, bd = Infinity;
+  for (let i = c.pathIdx; i < Math.min(sp.length, c.pathIdx + 30); i++) {
+    const d = (sp[i].x - c.x) ** 2 + (sp[i].z - c.z) ** 2;
+    if (d < bd) { bd = d; best = i; }
+  }
+  c.pathIdx = best; // so avanca, nunca volta na rota
+  let prev = { x: c.x, z: c.z }, acc = 0;
+  for (let i = best; i < sp.length; i++) {
+    acc += Math.hypot(sp[i].x - prev.x, sp[i].z - prev.z);
+    if (acc >= Ld) return sp[i];
+    prev = sp[i];
+  }
+  return sp[sp.length - 1];
+}
+/* perfil de velocidade: limita pela curvatura a frente, com folga para frear ate cada curva */
+function planSpeed(c) {
+  const sp = c.path;
+  if (!sp || sp.length < 3) return AI_MAX;
+  let v = AI_MAX, s = 0;
+  for (let i = Math.max(1, c.pathIdx); i < sp.length - 1 && s < 36; i++) {
+    const a = sp[i - 1], b = sp[i], d = sp[i + 1];
+    const ab = Math.hypot(b.x - a.x, b.z - a.z), bd = Math.hypot(d.x - b.x, d.z - b.z), ad = Math.hypot(d.x - a.x, d.z - a.z);
+    const den = ab * bd * ad;
+    if (den > 1e-6) {
+      const k = 2 * Math.abs((b.x - a.x) * (d.z - a.z) - (b.z - a.z) * (d.x - a.x)) / den; // curvatura de Menger
+      if (k > 1e-4) {
+        const vc = 2.0 / k;                            // v·κ ≤ giro maximo do volante (2.3 rad/s) com folga
+        v = Math.min(v, Math.sqrt(vc * vc + 2 * 26 * s)); // mais rapido AGORA so se da para frear ate a curva
+      }
+    }
+    s += bd;
+  }
+  return v;
+}
+
+/* nuvens */
+const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 });
+const clouds = [];
+for (let i = 0; i < 14; i++) {
+  const g = new THREE.Group();
+  const n = 3 + (Math.random() * 3 | 0);
+  for (let j = 0; j < n; j++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(2.5 + Math.random() * 2.5, 10, 8), cloudMat);
+    b.position.set((Math.random() - 0.5) * 9, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 5);
+    g.add(b);
+  }
+  g.position.set((Math.random() * 2 - 1) * 220, 38 + Math.random() * 25, (Math.random() * 2 - 1) * 220);
+  scene.add(g);
+  clouds.push({ g, v: 1 + Math.random() * 2.5 });
+}
+
+/* ================= CARROS ================= */
+function createCar(color) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 4.2),
+    new THREE.MeshStandardMaterial({ color, metalness: 0.4, roughness: 0.5 }));
+  body.position.y = 0.75;
+  body.castShadow = true;
+  g.add(body);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 1.9),
+    new THREE.MeshStandardMaterial({ color: 0x1c2733, metalness: 0.2, roughness: 0.2 }));
+  cabin.position.set(0, 1.35, -0.25);
+  cabin.castShadow = true;
+  g.add(cabin);
+  const wheelGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.42, 14);
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+  const wheels = [], frontWheels = [];
+  [[1.05, 1.35], [-1.05, 1.35], [1.05, -1.45], [-1.05, -1.45]].forEach(([wx, wz]) => {
+    const wg = new THREE.Group();
+    wg.position.set(wx, 0.45, wz);
+    const w = new THREE.Mesh(wheelGeo, wheelMat);
+    w.rotation.z = Math.PI / 2;
+    w.castShadow = true;
+    wg.add(w);
+    g.add(wg);
+    wheels.push(w);
+    if (wz > 0) frontWheels.push(wg);
+  });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xfffde7, emissive: 0xfff59d, emissiveIntensity: 0.9 });
+  [0.6, -0.6].forEach(hx => {
+    const hm = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.1), headMat);
+    hm.position.set(hx, 0.85, 2.12);
+    g.add(hm);
+  });
+  // luzes traseiras: vermelha (freio/re) e branca (re)
+  const tailMat = new THREE.MeshStandardMaterial({ color: 0xb71c1c, emissive: 0xff0000, emissiveIntensity: 0.4 });
+  const revMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, emissive: 0xffffff, emissiveIntensity: 0.08 });
+  [0.72, -0.72].forEach(hx => {
+    const tm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.1), tailMat);
+    tm.position.set(hx, 0.85, -2.12);
+    g.add(tm);
+  });
+  [0.36, -0.36].forEach(hx => {
+    const rm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.1), revMat);
+    rm.position.set(hx, 0.82, -2.12);
+    g.add(rm);
+  });
+  scene.add(g);
+  return { group: g, wheels, frontWheels, tailMat, revMat };
+}
+function makeCar(color, x, z, angle, isAI) {
+  const parts = createCar(color);
+  return Object.assign(parts, {
+    startX: x, startZ: z, startA: angle,
+    x, z, angle, speed: 0, steer: 0,
+    dead: false, deadTimer: 0, invuln: 0,
+    isAI, brakeOn: false, stuck: 0, revTime: 0, revSteer: 1,
+    failCount: 0, failTimer: 0, escSide: 1, escapePending: false,
+    escapeTime: 0, escapeAngle: 0, avoidIdx: -1, avoidTimer: 0,
+    path: null, pathIdx: 0, pathTarget: -1, replanT: 0
+  });
+}
+const player = makeCar(0x1976d2, 0, 70, Math.PI / 2, false);
+const ai = makeCar(0xd32f2f, 0, -70, -Math.PI / 2, true);
+
+/* sensor em leque da IA (visivel para debug) */
+function createSensorFan() {
+  const rays = FAN_TOTAL;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((rays + 1) * 3), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array((rays + 1) * 3), 3));
+  const idx = [];
+  for (let i = 1; i < rays; i++) idx.push(0, i, i + 1);
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false
+  }));
+  mesh.position.set(0, 0.5, 0.8);
+  mesh.frustumCulled = false;
+  return mesh;
+}
+const fan = createSensorFan();
+ai.group.add(fan);
+function updateSensorFan(clear, rel, lens, backward) {
+  // na re o leque vira para tras do carro
+  fan.position.z = backward ? -2.3 : 0.8;
+  fan.rotation.y = backward ? Math.PI : 0;
+  const pos = fan.geometry.attributes.position, col = fan.geometry.attributes.color;
+  pos.setXYZ(0, 0, 0, 0);
+  col.setXYZ(0, 1, 1, 0.6);
+  for (let i = 0; i < rel.length; i++) {
+    const d = clear[i];
+    pos.setXYZ(i + 1, Math.sin(rel[i]) * d, 0, Math.cos(rel[i]) * d);
+    const hit = d < lens[i] - 0.01;
+    col.setXYZ(i + 1, hit ? 1 : 0.1, hit ? 0.15 : 1, 0.1);
+  }
+  pos.needsUpdate = true;
+  col.needsUpdate = true;
+}
+
+function moveCar(c, dt) {
+  c.x += Math.sin(c.angle) * c.speed * dt;
+  c.z += Math.cos(c.angle) * c.speed * dt;
+  if (Math.abs(c.x) > BOUND) { c.x = Math.sign(c.x) * BOUND; c.speed *= -0.3; }
+  if (Math.abs(c.z) > BOUND) { c.z = Math.sign(c.z) * BOUND; c.speed *= -0.3; }
+  c.group.position.set(c.x, 0, c.z);
+  c.group.rotation.y = c.angle;
+  const spin = c.speed * dt / 0.45;
+  c.wheels.forEach(w => w.rotation.x += spin);
+  c.frontWheels.forEach(w => w.rotation.y = c.steer * 0.4);
+}
+function updateLights(c) {
+  const reversing = c.speed < -0.4;
+  c.revMat.emissiveIntensity = reversing ? 1.8 : 0.08;   // luz branca de re
+  c.tailMat.emissiveIntensity = reversing ? 1.8 : (c.brakeOn ? 1.6 : 0.4); // luz vermelha
+}
+
+/* ================= MOEDAS ================= */
+const coins = [];
+const coinGeo = new THREE.CylinderGeometry(1, 1, 0.18, 22);
+coinGeo.rotateX(Math.PI / 2);
+const coinMat = new THREE.MeshStandardMaterial({ color: 0xffc107, emissive: 0x7a5800, metalness: 0.7, roughness: 0.25 });
+function coinSpotOk(x, z) {
+  if (Math.abs(x) > 150 || Math.abs(z) > 150) return false;
+  const d = Math.hypot(x, z);
+  if (d > 23 && d < 37) return false; // faixa do trilho do trem
+  for (const o of staticObstacles) if (Math.hypot(x - o.x, z - o.z) < o.r + 3) return false;
+  if (Math.hypot(x - player.x, z - player.z) < 10) return false;
+  if (Math.hypot(x - ai.x, z - ai.z) < 10) return false;
+  for (const cn of coins) if (cn.mesh && Math.hypot(x - cn.x, z - cn.z) < 8) return false;
+  return true;
+}
+function randomCoinPos() {
+  for (let i = 0; i < 300; i++) {
+    const x = (Math.random() * 2 - 1) * 150, z = (Math.random() * 2 - 1) * 150;
+    if (coinSpotOk(x, z)) return { x, z };
+  }
+  return { x: 0, z: 55 };
+}
+function spawnCoin(c) {
+  const p = randomCoinPos();
+  c.x = p.x;
+  c.z = p.z;
+  c.phase = Math.random() * 6.28;
+  c.mesh.position.set(p.x, 1.2, p.z);
+}
+for (let i = 0; i < COIN_COUNT; i++) {
+  const mesh = new THREE.Mesh(coinGeo, coinMat);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  const c = { mesh, x: 0, z: 0, phase: 0 };
+  coins.push(c);
+  spawnCoin(c);
+}
+
+/* ================= EXPLOSAO ================= */
+const particles = [];
+const partGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+const partColors = [0xff5722, 0xffc107, 0xff9800, 0x424242, 0xfff176];
+function spawnExplosion(x, z) {
+  for (let i = 0; i < 36; i++) {
+    const m = new THREE.Mesh(partGeo, new THREE.MeshBasicMaterial({ color: partColors[i % 5], transparent: true }));
+    m.position.set(x, 1, z);
+    const a = Math.random() * Math.PI * 2;
+    const sp = Math.random() * 10 + 3;
+    particles.push({ m, vx: Math.sin(a) * sp, vy: Math.random() * 11 + 5, vz: Math.cos(a) * sp, life: 1.3 + Math.random() * 0.6, t: 0 });
+    scene.add(m);
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.t += dt;
+    p.vy -= 22 * dt;
+    p.m.position.x += p.vx * dt;
+    p.m.position.y += p.vy * dt;
+    p.m.position.z += p.vz * dt;
+    if (p.m.position.y < 0.2) { p.m.position.y = 0.2; p.vy *= -0.4; p.vx *= 0.8; p.vz *= 0.8; }
+    p.m.rotation.x += 6 * dt;
+    p.m.rotation.y += 4 * dt;
+    p.m.material.opacity = Math.max(0, 1 - p.t / p.life);
+    if (p.t >= p.life) {
+      scene.remove(p.m);
+      p.m.material.dispose();
+      particles.splice(i, 1);
+    }
+  }
+}
+
+/* ================= AUDIO ================= */
+const store = {
+  get(k, def) { try { const v = localStorage.getItem('carSim3d.' + k); return v === null ? def : JSON.parse(v); } catch (e) { return def; } },
+  set(k, v) { try { localStorage.setItem('carSim3d.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const audio = {
+  ctx: null, ready: false,
+  musicOn: false,                          // padrao: musica desligada
+  sfxOn: store.get('sfxOn', true),
+  musicVol: store.get('musicVol', 50),     // volumes memorizados
+  sfxVol: store.get('sfxVol', 70),
+  musicGain: null, sfxGain: null, engineOsc: null, engineGain: null,
+  step: 0, nextT: 0, timer: null, noiseBuf: null
+};
+function initAudio() {
+  if (audio.ready) return;
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return;
+  audio.ctx = new C();
+  audio.musicGain = audio.ctx.createGain();
+  audio.musicGain.connect(audio.ctx.destination);
+  audio.sfxGain = audio.ctx.createGain();
+  audio.sfxGain.connect(audio.ctx.destination);
+  const len = audio.ctx.sampleRate;
+  audio.noiseBuf = audio.ctx.createBuffer(1, len, audio.ctx.sampleRate);
+  const d = audio.noiseBuf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  // som do motor
+  audio.engineOsc = audio.ctx.createOscillator();
+  audio.engineOsc.type = 'sawtooth';
+  audio.engineOsc.frequency.value = 70;
+  const f = audio.ctx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.value = 420;
+  audio.engineGain = audio.ctx.createGain();
+  audio.engineGain.gain.value = 0;
+  audio.engineOsc.connect(f);
+  f.connect(audio.engineGain);
+  audio.engineGain.connect(audio.sfxGain);
+  audio.engineOsc.start();
+  audio.ready = true;
+  applyVolumes();
+  if (audio.musicOn) startMusic();
+}
+function applyVolumes() {
+  if (!audio.ready) return;
+  audio.musicGain.gain.value = audio.musicOn ? (audio.musicVol / 100) * 0.5 : 0;
+  audio.sfxGain.gain.value = audio.sfxOn ? (audio.sfxVol / 100) : 0;
+}
+/* trilha sonora procedural (loop chiptune) */
+const BASS = [45,0,45,0,45,0,43,0, 41,0,41,0,41,0,43,0, 36,0,36,0,36,0,40,0, 43,0,43,0,43,0,47,0];
+const LEAD = [69,0,72,74, 76,0,74,72, 69,0,67,69, 72,0,0,0, 65,0,69,72, 76,0,77,76, 72,0,74,72, 67,0,0,0];
+const STEP = 0.22;
+function noteAt(midi, t, dur, type, vol) {
+  const o = audio.ctx.createOscillator(), g = audio.ctx.createGain();
+  o.type = type;
+  o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g);
+  g.connect(audio.musicGain);
+  o.start(t);
+  o.stop(t + dur + 0.05);
+}
+function scheduleStep(s, t) {
+  const b = BASS[s % 32];
+  if (b) noteAt(b, t, STEP * 0.9, 'triangle', 0.5);
+  const l = LEAD[s % 32];
+  if (l) noteAt(l, t, STEP * 1.6, 'square', 0.16);
+  if (s % 2 === 0) { // chimbal
+    const src = audio.ctx.createBufferSource();
+    src.buffer = audio.noiseBuf;
+    const g = audio.ctx.createGain();
+    g.gain.setValueAtTime(s % 8 === 4 ? 0.12 : 0.05, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    const hp = audio.ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 6000;
+    src.connect(hp);
+    hp.connect(g);
+    g.connect(audio.musicGain);
+    src.start(t);
+    src.stop(t + 0.08);
+  }
+}
+function startMusic() {
+  if (!audio.ready || audio.timer) return;
+  audio.step = 0;
+  audio.nextT = audio.ctx.currentTime + 0.05;
+  audio.timer = setInterval(() => {
+    while (audio.nextT < audio.ctx.currentTime + 0.2) {
+      scheduleStep(audio.step, audio.nextT);
+      audio.step = (audio.step + 1) % 32;
+      audio.nextT += STEP;
+    }
+  }, 50);
+}
+function stopMusic() {
+  if (audio.timer) { clearInterval(audio.timer); audio.timer = null; }
+}
+/* efeitos sonoros */
+function blip(freq, t, dur, type, vol) {
+  const o = audio.ctx.createOscillator(), g = audio.ctx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g);
+  g.connect(audio.sfxGain);
+  o.start(t);
+  o.stop(t + dur + 0.05);
+}
+function sfxCoin(isAI) {
+  if (!audio.ready) return;
+  const t = audio.ctx.currentTime;
+  if (isAI) { blip(740, t, 0.12, 'square', 0.22); blip(988, t + 0.09, 0.18, 'square', 0.22); }
+  else { blip(988, t, 0.12, 'square', 0.25); blip(1319, t + 0.09, 0.2, 'square', 0.25); }
+}
+function sfxExplosion() {
+  if (!audio.ready) return;
+  const t = audio.ctx.currentTime;
+  const src = audio.ctx.createBufferSource();
+  src.buffer = audio.noiseBuf;
+  const g = audio.ctx.createGain();
+  g.gain.setValueAtTime(0.7, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+  const lp = audio.ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(2500, t);
+  lp.frequency.exponentialRampToValueAtTime(150, t + 0.7);
+  src.connect(lp);
+  lp.connect(g);
+  g.connect(audio.sfxGain);
+  src.start(t);
+  src.stop(t + 0.8);
+  blip(70, t, 0.5, 'sine', 0.5);
+}
+function updateEngine() {
+  if (!audio.ready) return;
+  const s = Math.abs(player.speed);
+  audio.engineOsc.frequency.value = 65 + s * 5.5;
+  audio.engineGain.gain.value = (state === 'playing' && !player.dead) ? 0.03 + (s / 32) * 0.07 : 0;
+}
+
+/* ================= UI DE AUDIO ================= */
+function updateAudioUI() {
+  $('muteM').textContent = audio.musicOn ? '🔊' : '🔇';
+  $('muteS').textContent = audio.sfxOn ? '🔊' : '🔇';
+  $('volM').value = audio.musicVol;
+  $('volS').value = audio.sfxVol;
+  $('pctM').textContent = audio.musicVol + '%';
+  $('pctS').textContent = audio.sfxVol + '%';
+}
+function setMusicVol(v) {
+  audio.musicVol = clamp(Math.round(v), 0, 100);
+  store.set('musicVol', audio.musicVol);
+  applyVolumes();
+  updateAudioUI();
+}
+function setSfxVol(v) {
+  audio.sfxVol = clamp(Math.round(v), 0, 100);
+  store.set('sfxVol', audio.sfxVol);
+  applyVolumes();
+  updateAudioUI();
+}
+function btn(id, fn) {
+  $(id).addEventListener('click', e => { initAudio(); fn(); e.currentTarget.blur(); });
+}
+btn('muteM', () => {
+  audio.musicOn = !audio.musicOn;
+  if (audio.musicOn) startMusic(); else stopMusic();
+  applyVolumes();
+  updateAudioUI();
+});
+btn('muteS', () => {
+  audio.sfxOn = !audio.sfxOn;
+  store.set('sfxOn', audio.sfxOn);
+  applyVolumes();
+  updateAudioUI();
+});
+btn('minusM', () => setMusicVol(audio.musicVol - 10));
+btn('plusM', () => setMusicVol(audio.musicVol + 10));
+btn('minusS', () => setSfxVol(audio.sfxVol - 10));
+btn('plusS', () => setSfxVol(audio.sfxVol + 10));
+$('volM').addEventListener('input', e => { initAudio(); setMusicVol(e.target.value); });
+$('volS').addEventListener('input', e => { initAudio(); setSfxVol(e.target.value); });
+$('volM').addEventListener('change', e => e.target.blur());
+$('volS').addEventListener('change', e => e.target.blur());
+updateAudioUI();
+
+/* ================= HUD ================= */
+function notify(text) {
+  const n = document.createElement('div');
+  n.className = 'msg';
+  n.textContent = text;
+  $('notify').appendChild(n);
+  while ($('notify').children.length > 3) $('notify').firstChild.remove();
+  setTimeout(() => n.remove(), 3600);
+}
+function updateScoreUI() {
+  $('scoreP').textContent = scoreP;
+  $('scoreA').textContent = scoreA;
+  // sem limite: as barras mostram a pontuacao relativa ao lider (minimo 10)
+  const m = Math.max(scoreP, scoreA, 10);
+  $('fillP').style.width = (scoreP * 100 / m) + '%';
+  $('fillA').style.width = (scoreA * 100 / m) + '%';
+}
+/* velocimetro (gauge) */
+const gctx = $('gauge').getContext('2d');
+function rrect(x, y, w, h, r) {
+  gctx.beginPath();
+  gctx.moveTo(x + r, y);
+  gctx.arcTo(x + w, y, x + w, y + h, r);
+  gctx.arcTo(x + w, y + h, x, y + h, r);
+  gctx.arcTo(x, y + h, x, y, r);
+  gctx.arcTo(x, y, x + w, y, r);
+  gctx.closePath();
+}
+function drawGauge(kmh) {
+  const cx = 105, cy = 92, R = 70, maxK = 160;
+  const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+  gctx.clearRect(0, 0, 210, 160);
+  gctx.fillStyle = 'rgba(0,0,0,.55)';
+  rrect(0, 0, 210, 160, 14);
+  gctx.fill();
+  gctx.strokeStyle = 'rgba(255,255,255,.25)';
+  gctx.lineWidth = 1;
+  gctx.stroke();
+  // arco (zona normal + zona vermelha)
+  gctx.lineWidth = 4;
+  gctx.strokeStyle = '#eceff1';
+  gctx.beginPath();
+  gctx.arc(cx, cy, R, a0, a0 + (a1 - a0) * (120 / maxK));
+  gctx.stroke();
+  gctx.strokeStyle = '#e53935';
+  gctx.beginPath();
+  gctx.arc(cx, cy, R, a0 + (a1 - a0) * (120 / maxK), a1);
+  gctx.stroke();
+  // marcas e numeros
+  gctx.fillStyle = '#cfd8dc';
+  gctx.font = '10px Segoe UI, Arial';
+  gctx.textAlign = 'center';
+  gctx.textBaseline = 'middle';
+  for (let k = 0; k <= maxK; k += 20) {
+    const a = a0 + (k / maxK) * (a1 - a0);
+    const c = Math.cos(a), s = Math.sin(a);
+    gctx.strokeStyle = k > 120 ? '#e53935' : '#eceff1';
+    gctx.lineWidth = 2;
+    gctx.beginPath();
+    gctx.moveTo(cx + c * (R - 8), cy + s * (R - 8));
+    gctx.lineTo(cx + c * R, cy + s * R);
+    gctx.stroke();
+    gctx.fillText(k, cx + c * (R - 20), cy + s * (R - 20));
+  }
+  // ponteiro
+  const a = a0 + (clamp(kmh, 0, maxK) / maxK) * (a1 - a0);
+  gctx.strokeStyle = '#ff1744';
+  gctx.lineWidth = 4;
+  gctx.beginPath();
+  gctx.moveTo(cx, cy);
+  gctx.lineTo(cx + Math.cos(a) * (R - 14), cy + Math.sin(a) * (R - 14));
+  gctx.stroke();
+  gctx.fillStyle = '#fff';
+  gctx.beginPath();
+  gctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  gctx.fill();
+  gctx.font = 'bold 16px Segoe UI, Arial';
+  gctx.fillText(kmh.toFixed(0) + ' km/h', cx, cy + 48);
+}
+
+/* ================= ENTRADA ================= */
+const keys = {};
+addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  keys[e.code] = true;
+  initAudio();
+  if (e.code === 'Digit1' || e.code === 'Numpad1') setCamMode(1);
+  if (e.code === 'Digit2' || e.code === 'Numpad2') setCamMode(2);
+  if (e.code === 'Digit3' || e.code === 'Numpad3') setCamMode(3);
+  if (e.code === 'KeyC' && !e.repeat) {
+    pipOn = !pipOn;
+    updateCamHud();
+    if (camMode === 3) notify(pipOn ? '👁️ Mini tela da IA ligada' : '👁️ Mini tela da IA desligada');
+  }
+  // no voo livre durante o jogo, ESPACO nao reinicia (evita reset acidental enquanto observa)
+  if (e.code === 'Space' && !e.repeat && !(camMode === 3 && state === 'playing')) startGame();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+
+/* ================= SENSOR (raycast 2D) ================= */
+function castRay(ox, oz, ang, maxLen, dyn) {
+  const dx = Math.sin(ang), dz = Math.cos(ang);
+  let best = maxLen;
+  const test = o => {
+    const cx = o.x - ox, cz = o.z - oz;
+    const b = cx * dx + cz * dz;
+    if (b <= 0) return;
+    const rr = o.r + 1.3; // margem da largura do carro
+    const d2 = cx * cx + cz * cz - b * b;
+    if (d2 > rr * rr) return;
+    const t = b - Math.sqrt(rr * rr - d2);
+    if (t < best) best = Math.max(0, t);
+  };
+  staticObstacles.forEach(test);
+  if (dyn) dyn.forEach(test);
+  const B = BOUND - 1.5;
+  if (dx > 1e-4) best = Math.min(best, (B - ox) / dx);
+  else if (dx < -1e-4) best = Math.min(best, (-B - ox) / dx);
+  if (dz > 1e-4) best = Math.min(best, (B - oz) / dz);
+  else if (dz < -1e-4) best = Math.min(best, (-B - oz) / dz);
+  return Math.max(0, Math.min(best, maxLen));
+}
+/* leque completo: raios frontais + bigodes laterais, em ordem angular crescente */
+function senseRays(cx, cz, baseAngle, mainLen, whiskLen, dyn) {
+  const rel = [], lens = [], clear = [];
+  for (let w = WHISK.angles.length - 1; w >= 0; w--) { rel.push(-WHISK.angles[w]); lens.push(whiskLen); }
+  for (let i = 0; i < SENSOR.rays; i++) {
+    rel.push(-SENSOR.spread / 2 + SENSOR.spread * i / (SENSOR.rays - 1));
+    lens.push(mainLen);
+  }
+  for (const a of WHISK.angles) { rel.push(a); lens.push(whiskLen); }
+  for (let i = 0; i < rel.length; i++) clear.push(castRay(cx, cz, baseAngle + rel[i], lens[i], dyn));
+  return { rel, lens, clear };
+}
+/* scan de 360 graus: direcao com mais espaco livre para a IA fugir de armadilhas */
+function openDirection(c, dyn) {
+  let bestA = c.angle + Math.PI, bestD = -1;
+  for (let i = 0; i < 16; i++) {
+    const a = i / 16 * Math.PI * 2;
+    let d = castRay(c.x, c.z, a, 30, dyn);
+    if (Math.abs(normA(a - c.angle)) < 0.5) d -= 4; // evita voltar direto para o bloqueio
+    if (d > bestD) { bestD = d; bestA = a; }
+  }
+  return bestA;
+}
+
+/* ================= JOGADOR ================= */
+function updatePlayer(dt) {
+  const c = player;
+  if (c.dead) return;
+  if (state !== 'playing') {
+    c.speed *= Math.max(0, 1 - 2 * dt);
+    c.steer = 0;
+    moveCar(c, dt);
+    return;
+  }
+  const drive = camMode !== 3; // no voo livre o teclado controla a camera, nao o carro
+  const up = drive && (keys['ArrowUp'] || keys['KeyW']);
+  const down = drive && (keys['ArrowDown'] || keys['KeyS']);
+  const left = drive && (keys['ArrowLeft'] || keys['KeyA']);
+  const right = drive && (keys['ArrowRight'] || keys['KeyD']);
+  if (up) c.speed += 20 * dt;
+  else if (down) c.speed -= (c.speed > 0 ? 34 : 16) * dt;
+  else c.speed -= Math.sign(c.speed) * Math.min(Math.abs(c.speed), 8 * dt);
+  c.speed -= c.speed * 0.35 * dt;
+  c.speed = clamp(c.speed, -12, 32);
+  c.brakeOn = !!(down && c.speed > 0.5);
+  c.steer = (left ? 1 : 0) - (right ? 1 : 0);
+  c.angle += c.steer * 2.3 * dt * clamp(c.speed / 9, -1, 1);
+  moveCar(c, dt);
+}
+
+/* ================= IA ================= */
+function updateAI(dt) {
+  const c = ai;
+  if (c.dead) return;
+  if (state !== 'playing') {
+    c.speed *= Math.max(0, 1 - 2 * dt);
+    c.steer = 0;
+    moveCar(c, dt);
+    return;
+  }
+  // janela de falhas: se ficou um tempo sem travar, zera a escalada
+  c.failTimer = Math.max(0, c.failTimer - dt);
+  if (c.failTimer <= 0) c.failCount = 0;
+  c.avoidTimer = Math.max(0, c.avoidTimer - dt);
+  // alvo: moeda mais proxima (ignora temporariamente a moeda problematica)
+  let target = null, bd = 1e18, tIdx = -1;
+  for (let i = 0; i < coins.length; i++) {
+    if (i === c.avoidIdx && c.avoidTimer > 0) continue;
+    const cn = coins[i];
+    const d = (cn.x - c.x) ** 2 + (cn.z - c.z) ** 2;
+    if (d < bd) { bd = d; target = cn; tIdx = i; }
+  }
+  if (!target) { target = coins[0]; tIdx = 0; }
+  // obstaculos dinamicos: jogador + vagoes do trem
+  const dyn = [{ x: player.x, z: player.z, r: 2.3 }];
+  for (const t of trainCircles) dyn.push(t);
+  // modo re: o leque vira para TRAS e a IA enxerga por onde recua
+  if (c.revTime > 0) {
+    c.revTime -= dt;
+    const bx = c.x - Math.sin(c.angle) * 2.3, bz = c.z - Math.cos(c.angle) * 2.3;
+    const Lb = 6 - Math.min(0, c.speed) * 0.55; // leque traseiro tambem adaptativo
+    const bs = senseRays(bx, bz, c.angle + Math.PI, Lb, 3, dyn);
+    const bClear = bs.clear, bRel = bs.rel;
+    updateSensorFan(bClear, bRel, bs.lens, true);
+    // perigo atras (raios centrais do leque traseiro)
+    let backDanger = Lb;
+    for (let i = 0; i < bRel.length; i++) if (Math.abs(bRel[i]) < 0.38) backDanger = Math.min(backDanger, bClear[i]);
+    if (backDanger < 2.4) c.revTime = 0; // tras bloqueado: aborta a re
+    if (c.revTime <= 0 && c.escapePending) {
+      c.escapePending = false;
+      c.escapeAngle = openDirection(c, dyn);
+      c.escapeTime = 2.2 + 0.6 * c.failCount;
+    }
+    // recua mirando o raio traseiro mais livre (preferindo o lado escolhido)
+    let bI = 0, bS = -1e9;
+    for (let i = 0; i < bRel.length; i++) {
+      const s = bClear[i] * 1.5 - Math.abs(bRel[i]) * 2 + (Math.sign(bRel[i]) === c.escSide ? 2.5 : 0);
+      if (s > bS) { bS = s; bI = i; }
+    }
+    c.brakeOn = false;
+    // velocidade de re proporcional ao espaco livre atras
+    const revTarget = -Math.min(9, Math.max(2.5, backDanger * 0.9));
+    c.speed = Math.max(revTarget, c.speed - 26 * dt);
+    c.steer = clamp(-bRel[bI] * 2.5, -1, 1);
+    c.angle += c.steer * 2.2 * dt * clamp(c.speed / 9, -1, 1);
+    moveCar(c, dt);
+    return;
+  }
+  // planejamento de trajetoria: A* na grade + suavizacao por spline Catmull-Rom
+  c.replanT -= dt;
+  if (c.pathTarget !== tIdx || c.replanT <= 0 || !c.path) {
+    c.path = smoothPath(findPath(c.x, c.z, target.x, target.z));
+    c.pathIdx = 0;
+    c.pathTarget = tIdx;
+    c.replanT = 1.5;
+    updatePathLine(c.path, c.x, c.z);
+  }
+  const distGoal = Math.hypot(target.x - c.x, target.z - c.z);
+  // ponto-guia na spline (pure pursuit): lookahead curto em baixa velocidade = manobra fina
+  let wp = target;
+  if (c.path && c.path.length) {
+    wp = pathLookahead(c, clamp(3 + 0.45 * Math.max(0, c.speed), 3.5, 13));
+  }
+  // sensor ADAPTATIVO: o leque encolhe em baixa velocidade para caber em espacos justos
+  const ox = c.x + Math.sin(c.angle) * 0.8, oz = c.z + Math.cos(c.angle) * 0.8;
+  const L = SENSOR.lenMin + Math.max(0, c.speed) * SENSOR.lenK;
+  const wLen = WHISK.lenMin + Math.max(0, c.speed) * WHISK.lenK;
+  const sr = senseRays(ox, oz, c.angle, L, wLen, dyn);
+  const clear = sr.clear, rel = sr.rel, lens = sr.lens;
+  updateSensorFan(clear, rel, lens, false);
+  const isWhisk = i => Math.abs(rel[i]) > SENSOR.spread / 2 + 0.01;
+  // obstaculo ALEM da moeda nao assusta: o carro coleta antes de alcancar a parede
+  const effLen = i => Math.min(lens[i], distGoal + 1.2);
+  // perigo FRONTAL: so os raios bem centrais (e so isso dispara freio e re)
+  let danger = L, dangerRaw = L;
+  for (let i = 0; i < rel.length; i++) {
+    if (Math.abs(rel[i]) >= 0.16) continue;
+    dangerRaw = Math.min(dangerRaw, clear[i]);
+    if (clear[i] < effLen(i)) danger = Math.min(danger, clear[i]);
+  }
+  // distancia livre em cada lateral (bigodes)
+  let sideL = 1e9, sideR = 1e9;
+  for (let i = 0; i < rel.length; i++) {
+    if (!isWhisk(i) || clear[i] >= effLen(i) - 0.01) continue;
+    if (rel[i] > 0) sideL = Math.min(sideL, clear[i]);
+    else sideR = Math.min(sideR, clear[i]);
+  }
+  // direcao desejada: em fuga vai para a area aberta, senao segue a rota planejada
+  let desired;
+  if (c.escapeTime > 0) {
+    c.escapeTime -= dt;
+    desired = c.escapeAngle;
+  } else {
+    desired = Math.atan2(wp.x - c.x, wp.z - c.z);
+  }
+  const diff = normA(desired - c.angle);
+  // volante = atracao pelo alvo + repulsao dos obstaculos:
+  // deteccao a ESQUERDA empurra para a DIREITA, deteccao a DIREITA empurra para a ESQUERDA
+  let repulse = 0;
+  for (let i = 0; i < rel.length; i++) {
+    if (isWhisk(i)) continue;                      // bigodes laterais sao tratados a parte
+    if (clear[i] >= effLen(i) - 0.01) continue;    // raio livre (ou alem da moeda) nao empurra
+    const prox = 1 - clear[i] / L;                 // quanto mais perto, mais forte empurra
+    const central = 1 - Math.abs(rel[i]) / (SENSOR.spread / 2); // centro pesa mais que a borda
+    let side = -Math.sign(rel[i]);
+    if (side === 0) side = diff >= 0 ? 1 : -1;     // obstaculo no centro exato: desvia para o lado do alvo
+    repulse += side * prox * (0.6 + central * 1.4);
+  }
+  let rawSteer = clamp(diff * 1.2, -1, 1) + repulse * 1.2;
+  // protecao lateral: obstaculo colado na lateral empurra e BLOQUEIA virar para ele
+  const SIDE_SAFE = 2.2 + Math.max(0, c.speed) * 0.09; // margem lateral adaptativa: justa em baixa velocidade
+  const sideHard = 1.5 + Math.max(0, c.speed) * 0.04;
+  if (sideL < SIDE_SAFE) rawSteer -= (1 - sideL / SIDE_SAFE) * 1.4; // esquerda ocupada -> direita
+  if (sideR < SIDE_SAFE) rawSteer += (1 - sideR / SIDE_SAFE) * 1.4; // direita ocupada -> esquerda
+  if (sideL < sideHard) rawSteer = Math.min(rawSteer, 0); // proibido virar para a esquerda
+  if (sideR < sideHard) rawSteer = Math.max(rawSteer, 0); // proibido virar para a direita
+  rawSteer = clamp(rawSteer, -1, 1);
+  c.steer += clamp(rawSteer - c.steer, -6 * dt, 6 * dt); // suaviza o volante
+  // velocidade-alvo: perfil pela curvatura da spline + frenagem cinematica
+  let tSpeed = planSpeed(c) * (1 - 0.4 * Math.abs(c.steer));
+  if (c.escapeTime > 0) tSpeed = Math.min(tSpeed, 14);
+  // moeda com parede logo atras: aproximacao lenta e controlada (sem desistir)
+  if (distGoal < 12 && dangerRaw < distGoal + 5) tSpeed = Math.min(tSpeed, Math.max(4, distGoal));
+  // freia apenas o necessario para parar antes da margem (v² = 2·a·d)
+  const freeAhead = danger - (2.2 + Math.max(0, c.speed) * 0.05);
+  tSpeed = Math.min(tSpeed, freeAhead > 0 ? Math.sqrt(2 * 26 * freeAhead) : 0);
+  if (Math.min(sideL, sideR) < sideHard + 0.7) tSpeed = Math.min(tSpeed, 9); // passagem apertada
+  c.brakeOn = tSpeed < c.speed - 1;
+  c.speed += clamp(tSpeed - c.speed, -30 * dt, 16 * dt);
+  c.speed = clamp(c.speed, -9, AI_MAX);
+  // bloqueio frontal com o carro travado -> re (mantendo a escalada anti-loop)
+  if (danger < 3.2 && Math.abs(c.speed) < 1.5) c.stuck += dt;
+  else c.stuck = Math.max(0, c.stuck - dt * 2);
+  if (c.stuck > 0.5) {
+    c.failCount++;
+    c.failTimer = 7;
+    if (c.failCount === 1) {
+      // escolhe o lado com mais espaco e MANTEM esse lado nas tentativas seguintes
+      let lSum = 0, rSum = 0;
+      for (let i = 0; i < rel.length; i++) {
+        if (rel[i] < 0) lSum += clear[i];
+        else if (rel[i] > 0) rSum += clear[i];
+      }
+      c.escSide = rSum > lSum ? 1 : -1;
+    }
+    c.revSteer = -c.escSide; // de re, o nariz gira sempre para o lado escolhido
+    c.revTime = Math.min(3, 1.2 + 0.5 * c.failCount);
+    c.path = null; // forca replanejamento da rota apos a manobra
+    c.escapePending = c.failCount >= 2;
+    if (c.failCount >= 3) {
+      c.avoidIdx = tIdx;  // desiste dessa moeda por um tempo e busca outra
+      c.avoidTimer = 8;
+      c.failCount = 0;
+    }
+    c.stuck = 0;
+  }
+  c.angle += c.steer * 2.3 * dt * clamp(c.speed / 9, -1, 1);
+  moveCar(c, dt);
+}
+
+/* ================= EXPLOSAO / RESPAWN ================= */
+function explodeCar(c) {
+  if (c.dead) return;
+  c.dead = true;
+  c.deadTimer = 2.2;
+  c.speed = 0;
+  c.group.visible = false;
+  spawnExplosion(c.x, c.z);
+  sfxExplosion();
+  notify(c.isAI ? '💥 A IA bateu e voltou ao início!' : '💥 Você bateu! Voltando ao início...');
+}
+function updateRespawn(c, dt) {
+  if (c.dead) {
+    c.deadTimer -= dt;
+    if (c.deadTimer <= 0) {
+      c.dead = false;
+      c.x = c.startX; c.z = c.startZ; c.angle = c.startA;
+      c.speed = 0;
+      c.invuln = 2;
+      c.stuck = 0; c.revTime = 0;
+      c.failCount = 0; c.failTimer = 0; c.escapeTime = 0; c.escapePending = false;
+      c.path = null; c.pathTarget = -1; c.replanT = 0;
+      c.group.visible = true;
+      moveCar(c, 0);
+    }
+  } else if (c.invuln > 0) {
+    c.invuln -= dt;
+    c.group.visible = c.invuln <= 0 ? true : (Math.floor(performance.now() / 120) % 2 === 0);
+  }
+}
+function checkCollisions() {
+  if (state !== 'playing') return;
+  for (const c of [player, ai]) {
+    if (c.dead || c.invuln > 0) continue;
+    let hit = false;
+    for (const o of staticObstacles) if (Math.hypot(c.x - o.x, c.z - o.z) < o.r + 1.6) { hit = true; break; }
+    if (!hit) for (const t of trainCircles) if (Math.hypot(c.x - t.x, c.z - t.z) < t.r + 1.6) { hit = true; break; }
+    if (hit) explodeCar(c);
+  }
+  if (!player.dead && !ai.dead && player.invuln <= 0 && ai.invuln <= 0 &&
+      Math.hypot(player.x - ai.x, player.z - ai.z) < 3.8) {
+    explodeCar(player);
+    explodeCar(ai);
+  }
+}
+
+/* ================= MOEDAS / PLACAR ================= */
+function updateCoins(dt, t) {
+  for (const cn of coins) {
+    cn.mesh.rotation.y += 2.5 * dt;
+    cn.mesh.position.y = 1.2 + Math.sin(t * 2 + cn.phase) * 0.25;
+  }
+  if (state !== 'playing') return;
+  for (const c of [player, ai]) {
+    if (c.dead) continue;
+    for (const cn of coins) {
+      if (Math.hypot(c.x - cn.x, c.z - cn.z) < 2.7) {
+        if (c.isAI) {
+          scoreA++;
+          notify('🤖 A IA coletou uma moeda! Total: ' + scoreA);
+        } else {
+          scoreP++;
+        }
+        sfxCoin(c.isAI);
+        spawnCoin(cn); // repoe a moeda coletada
+        updateScoreUI();
+      }
+    }
+  }
+}
+function startGame() {
+  scoreP = 0;
+  scoreA = 0;
+  updateScoreUI();
+  for (const c of [player, ai]) {
+    c.dead = false; c.deadTimer = 0; c.invuln = 0;
+    c.speed = 0; c.steer = 0; c.stuck = 0; c.revTime = 0;
+    c.failCount = 0; c.failTimer = 0; c.escapeTime = 0; c.escapePending = false;
+    c.avoidIdx = -1; c.avoidTimer = 0;
+    c.path = null; c.pathTarget = -1; c.replanT = 0;
+    c.x = c.startX; c.z = c.startZ; c.angle = c.startA;
+    c.group.visible = true;
+    moveCar(c, 0);
+  }
+  coins.forEach(spawnCoin);
+  $('overlay').classList.add('hidden');
+  state = 'playing';
+  if (camMode === 3) lockPointer(); // ja comeca com o mouse capturado na visao aerea
+  notify('🏁 Corrida iniciada! Colete o máximo de moedas!');
+}
+
+/* ================= CAMERAS (1=jogador, 2=IA, 3=voo livre) ================= */
+let camMode = 3; // o jogo comeca na visao aerea
+/* mini tela (PiP) com o ponto de vista da IA durante o voo livre */
+let pipOn = true;
+const pip = { y: 62, w: 0, h: 0 }; // y = distancia do topo, em px de CSS
+const aiCam = new THREE.PerspectiveCamera(70, 16 / 9, 0.1, 1200);
+aiCam.position.set(0, 6, -82); // ja nasce atras do spawn da IA (evita "mergulho" na 1a ativacao)
+function layoutPip() {
+  pip.w = Math.round(Math.min(innerWidth * 0.3, 420));
+  pip.h = Math.round(pip.w * 0.5625);
+  const el = $('pip');
+  el.style.width = pip.w + 'px';
+  el.style.height = pip.h + 'px';
+  el.style.right = '16px';
+  el.style.top = pip.y + 'px';
+  aiCam.aspect = pip.w / pip.h;
+  aiCam.updateProjectionMatrix();
+}
+function updateCamHud() {
+  $('pip').style.display = camMode === 3 && pipOn ? 'block' : 'none';
+  $('camhelp').style.display = camMode === 3 ? 'block' : 'none';
+}
+layoutPip();
+updateCamHud();
+renderer.domElement.style.cursor = 'grab'; // ja nasce no voo livre
+const fly = { x: 0, y: 55, z: 155, yaw: 0, pitch: -0.42, drag: false, lastX: 0, lastY: 0 };
+function setCamMode(m) {
+  if (m === camMode) return;
+  if (m === 3) {
+    // voo livre: vista baixa e inclinada, com a estrada e o trilho do trem em perspectiva
+    fly.x = 0; fly.y = 55; fly.z = 155;
+    fly.yaw = 0; fly.pitch = -0.42;
+    notify('📷 Voo livre: WASD/setas voam, SHIFT sobe, ESPAÇO desce, mouse gira o olhar (ESC solta)');
+  } else {
+    notify(m === 1 ? '📷 Câmera: seu carro' : '📷 Câmera: carro da IA');
+  }
+  camMode = m;
+  renderer.domElement.style.cursor = m === 3 ? 'grab' : '';
+  if (m === 3) lockPointer();
+  else if (document.pointerLockElement) document.exitPointerLock();
+  updateCamHud();
+}
+function lockPointer() {
+  // pode ser recusado pelo navegador (ex.: sem gesto valido); o clique no mapa tenta de novo
+  const p = renderer.domElement.requestPointerLock && renderer.domElement.requestPointerLock();
+  if (p && p.catch) p.catch(() => {});
+}
+function updateFlyCam(dt) {
+  // movimento sempre HORIZONTAL na direcao do olhar: da para sobrevoar olhando para baixo
+  // sem perder altura — so SHIFT (sobe) e ESPACO (desce) mudam a altitude
+  const fwd = { x: -Math.sin(fly.yaw), z: -Math.cos(fly.yaw) };
+  const right = { x: Math.cos(fly.yaw), z: -Math.sin(fly.yaw) };
+  const f = (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0) - (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0);
+  const s = (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0) - (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
+  const sp = 60 * dt;
+  fly.x += (fwd.x * f + right.x * s) * sp;
+  fly.z += (fwd.z * f + right.z * s) * sp;
+  if (keys['ShiftLeft'] || keys['ShiftRight']) fly.y += 45 * dt;
+  // descida no ESPACO (CTRL nao da: o navegador fecha a aba com Ctrl+W antes da pagina ver a tecla)
+  if (keys['Space']) fly.y -= 45 * dt;
+  fly.x = clamp(fly.x, -380, 380);
+  fly.z = clamp(fly.z, -380, 380);
+  fly.y = clamp(fly.y, 1.5, 380);
+  camera.position.set(fly.x, fly.y, fly.z);
+  camera.rotation.set(fly.pitch, fly.yaw, 0);
+}
+function updateCamera(dt) {
+  if (camMode === 3) { updateFlyCam(dt); return; }
+  const c = camMode === 2 ? ai : player;
+  const tx = c.x - Math.sin(c.angle) * 10.5;
+  const tz = c.z - Math.cos(c.angle) * 10.5;
+  const ty = 5.8;
+  const k = 1 - Math.exp(-5 * dt);
+  camera.position.x += (tx - camera.position.x) * k;
+  camera.position.y += (ty - camera.position.y) * k;
+  camera.position.z += (tz - camera.position.z) * k;
+  camera.lookAt(c.x + Math.sin(c.angle) * 4, 1.6, c.z + Math.cos(c.angle) * 4);
+}
+/* olhar do voo livre: pointer lock (mouse livre, ESC solta); arrastar fica de reserva */
+renderer.domElement.addEventListener('mousedown', e => {
+  if (camMode !== 3) return;
+  if (document.pointerLockElement !== renderer.domElement) lockPointer();
+  fly.drag = true;
+  fly.lastX = e.clientX;
+  fly.lastY = e.clientY;
+});
+addEventListener('mousemove', e => {
+  if (camMode === 3 && document.pointerLockElement === renderer.domElement) {
+    fly.yaw -= e.movementX * 0.0026;
+    fly.pitch = clamp(fly.pitch - e.movementY * 0.0026, -1.55, 1.55);
+    return;
+  }
+  if (!fly.drag) return;
+  fly.yaw -= (e.clientX - fly.lastX) * 0.0042;
+  fly.pitch = clamp(fly.pitch - (e.clientY - fly.lastY) * 0.0042, -1.55, 1.55);
+  fly.lastX = e.clientX;
+  fly.lastY = e.clientY;
+});
+addEventListener('mouseup', () => fly.drag = false);
+document.addEventListener('pointerlockchange', () => {
+  if (camMode === 3 && document.pointerLockElement !== renderer.domElement)
+    notify('🖱️ Mouse solto — clique no mapa para capturar de novo');
+});
+
+/* ================= LOOP PRINCIPAL ================= */
+updateScoreUI();
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+  updateTrain(dt);
+  updatePlayer(dt);
+  updateAI(dt);
+  updateRespawn(player, dt);
+  updateRespawn(ai, dt);
+  checkCollisions();
+  updateCoins(dt, t);
+  updateParticles(dt);
+  for (const cl of clouds) {
+    cl.g.position.x += cl.v * dt;
+    if (cl.g.position.x > 240) cl.g.position.x = -240;
+  }
+  updateLights(player);
+  updateLights(ai);
+  updateCamera(dt);
+  updateEngine();
+  drawGauge(Math.abs(player.speed) * 4.5);
+  renderer.render(scene, camera);
+  if (camMode === 3 && pipOn) {
+    // mini tela: perseguicao em 3a pessoa do carro da IA (mesma camera do modo 2)
+    const ptx = ai.x - Math.sin(ai.angle) * 10.5;
+    const ptz = ai.z - Math.cos(ai.angle) * 10.5;
+    const pk = 1 - Math.exp(-5 * dt);
+    aiCam.position.x += (ptx - aiCam.position.x) * pk;
+    aiCam.position.y += (5.8 - aiCam.position.y) * pk;
+    aiCam.position.z += (ptz - aiCam.position.z) * pk;
+    aiCam.lookAt(ai.x + Math.sin(ai.angle) * 4, 1.6, ai.z + Math.cos(ai.angle) * 4);
+    const vx = innerWidth - pip.w - 16, vy = innerHeight - pip.y - pip.h;
+    renderer.setScissorTest(true);
+    renderer.setViewport(vx, vy, pip.w, pip.h);
+    renderer.setScissor(vx, vy, pip.w, pip.h);
+    renderer.render(scene, aiCam);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, innerWidth, innerHeight);
+  }
+}
+animate();
+</script>
+</body>
+</html>

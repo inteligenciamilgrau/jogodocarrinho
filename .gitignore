@@ -1,0 +1,9 @@
+# temporarios de captura de tela
+_shot_tmp.html
+_temp_autostart.html
+shot*.png
+
+# lixo de sistema
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏎️ Garagem do Carrinho — um jogo, várias IAs</title>
+<style>
+  :root{
+    --bg:#0f0f0f; --card:#1c1c1c; --txt:#f1f1f1; --sub:#aaaaaa;
+    --borda:#2a2a2a; --destaque:#ffd54a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:'Segoe UI',Arial,sans-serif}
+  header{
+    display:flex;align-items:center;gap:14px;padding:16px 28px;
+    border-bottom:1px solid var(--borda);position:sticky;top:0;z-index:5;
+    background:rgba(15,15,15,.94);backdrop-filter:blur(6px)
+  }
+  header .logo{font-size:32px}
+  header h1{font-size:20px;margin:0;letter-spacing:.3px}
+  header p{margin:2px 0 0;font-size:13px;color:var(--sub)}
+  main{max-width:1280px;margin:0 auto;padding:28px 24px 60px}
+  h2.secao{font-size:16px;font-weight:600;color:var(--sub);margin:0 0 18px}
+
+  /* grade estilo YouTube: 3 colunas, responsiva */
+  .grade{display:grid;grid-template-columns:repeat(3,1fr);gap:26px 20px}
+  @media(max-width:980px){.grade{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:620px){.grade{grid-template-columns:1fr}}
+
+  .card{display:block;text-decoration:none;color:inherit;border-radius:14px;outline:none}
+  .card:focus-visible{box-shadow:0 0 0 3px var(--destaque)}
+  .thumb{
+    position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;
+    background:#000;border:1px solid var(--borda);
+    transition:transform .18s ease, box-shadow .18s ease
+  }
+  .card:hover .thumb{transform:scale(1.025);box-shadow:0 10px 30px rgba(0,0,0,.55)}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .selo{
+    position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.85);
+    color:#fff;font-size:12px;font-weight:700;padding:2px 7px;border-radius:5px
+  }
+  .play{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    opacity:0;transition:opacity .18s ease;background:rgba(0,0,0,.25);font-size:54px
+  }
+  .card:hover .play{opacity:1}
+  .info{display:flex;gap:12px;padding:12px 4px 0}
+  .avatar{
+    flex:none;width:38px;height:38px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px
+  }
+  .titulo{font-size:15px;font-weight:600;line-height:1.35;margin:0 0 4px}
+  .modelo{font-size:13px;color:var(--sub);margin:0}
+  .modelo b{color:#dddddd;font-weight:600}
+  .meta{font-size:12px;color:var(--sub);margin:2px 0 0}
+
+  /* vaga para os proximos jogos */
+  .embreve .thumb{
+    border:2px dashed #3a3a3a;background:#161616;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px
+  }
+  .embreve:hover .thumb{transform:none;box-shadow:none}
+  .embreve .thumb .icone{font-size:42px}
+  .embreve .thumb .texto{font-size:14px;color:var(--sub)}
+  footer{
+    max-width:1280px;margin:0 auto;padding:18px 24px 40px;
+    color:var(--sub);font-size:12.5px;border-top:1px solid var(--borda)
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">🏎️</span>
+  <div>
+    <h1>Garagem do Carrinho</h1>
+    <p>O mesmo desafio, construído por diferentes modelos de IA — escolha um carrinho e jogue!</p>
+  </div>
+</header>
+<main>
+  <h2 class="secao">🎮 Jogos</h2>
+  <div class="grade" id="grade"></div>
+</main>
+<footer>
+  Cada jogo é um arquivo HTML independente criado por um modelo de IA diferente.
+  Para adicionar o seu, leia o <a href="COMO_ADICIONAR_SEU_JOGO.md" style="color:var(--destaque)">guia de contribuição</a>.
+</footer>
+<script>
+/* =====================================================================
+   LISTA DE JOGOS — para adicionar o seu, acrescente um objeto aqui.
+   Padrão: jogos/carrinho_<modelo>.html + capas/carrinho_<modelo>.png
+   (capa 1280x720). Detalhes no COMO_ADICIONAR_SEU_JOGO.md
+   ===================================================================== */
+const GAMES = [
+  {
+    arquivo: 'jogos/carrinho_fable_5.html',
+    capa: 'capas/carrinho_fable_5.png',
+    titulo: 'Carrinho 3D — Você × IA na caça às moedas',
+    modelo: 'Claude Fable 5',
+    sigla: 'F5',
+    corAvatar: 'linear-gradient(135deg,#d97706,#7c3aed)',
+    data: 'junho de 2026',
+    tags: 'A* + Splines · Leque adaptativo · Voo livre',
+    selo: '3D'
+  },
+];
+
+const VAGAS_POR_LINHA = 3; // completa a linha com cartões "em breve"
+
+const grade = document.getElementById('grade');
+for (const g of GAMES) {
+  const a = document.createElement('a');
+  a.className = 'card';
+  a.href = g.arquivo;
+  a.innerHTML = `
+    <div class="thumb">
+      <img src="${g.capa}" alt="Capa de ${g.titulo}" loading="lazy">
+      <span class="selo">${g.selo}</span>
+      <span class="play">▶️</span>
+    </div>
+    <div class="info">
+      <span class="avatar" style="background:${g.corAvatar}">${g.sigla}</span>
+      <span>
+        <p class="titulo">${g.titulo}</p>
+        <p class="modelo">criado por <b>${g.modelo}</b></p>
+        <p class="meta">${g.data} · ${g.tags}</p>
+      </span>
+    </div>`;
+  grade.appendChild(a);
+}
+/* preenche o resto da linha com vagas para os proximos modelos */
+const faltam = (VAGAS_POR_LINHA - GAMES.length % VAGAS_POR_LINHA) % VAGAS_POR_LINHA;
+for (let i = 0; i < faltam; i++) {
+  const d = document.createElement('div');
+  d.className = 'card embreve';
+  d.innerHTML = `
+    <div class="thumb">
+      <span class="icone">🔜</span>
+      <span class="texto">Em breve — aguardando a próxima IA…</span>
+    </div>`;
+  grade.appendChild(d);
+}
+</script>
+</body>
+</html>
