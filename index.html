@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <title>Inteligência Mil Grau — Jogos Criados por IA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -202,6 +203,16 @@
     border:1px solid var(--borda-hover);backdrop-filter:blur(10px);
     letter-spacing:.5px;text-transform:uppercase;
   }
+  .thumb-modelo{
+    position:absolute;top:10px;left:10px;z-index:2;
+    background:var(--gradient-hero);color:#000;
+    font-size:12px;font-weight:900;padding:6px 14px;border-radius:8px;
+    border:1px solid rgba(255,255,255,.25);
+    letter-spacing:.8px;text-transform:uppercase;
+    font-family:var(--font-display);
+    box-shadow:0 0 20px rgba(74,222,128,.5),0 4px 15px rgba(0,0,0,.4);
+    text-shadow:0 1px 0 rgba(255,255,255,.3);
+  }
   .hero-grade .card-info{padding:14px}
   .hero-grade .card-titulo{
     font-size:14px;font-weight:700;line-height:1.35;margin-bottom:6px;
@@ -217,7 +228,7 @@
     font-size:10px;font-weight:800;color:#fff;
     font-family:var(--font-display);
   }
-  .hero-grade .modelo{font-size:12px;color:var(--txt-muted)}
+  .hero-grade .modelo{font-size:13px;color:#e5e7eb;font-weight:800}
   .hero-grade .embreve .thumb{
     background:var(--bg-elevated);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
@@ -323,8 +334,8 @@
     box-shadow:0 4px 15px rgba(0,0,0,.3);
   }
   .card-meta{flex:1;min-width:0}
-  .card-meta .modelo{font-size:12px;color:var(--txt-muted);text-transform:uppercase;letter-spacing:1px}
-  .card-meta .data{font-size:12px;color:var(--txt-muted)}
+  .card-meta .modelo{font-size:15px;color:#e5e7eb;text-transform:uppercase;letter-spacing:1px;font-weight:800}
+  .card-meta .data{font-size:12px;color:#9ca3af;font-weight:500}
   .card-titulo{
     font-size:16px;font-weight:700;line-height:1.4;margin-bottom:8px;
     color:var(--txt);transition:color .2s;
@@ -599,7 +610,7 @@ const GAMES = [
   {
     arquivo: 'jogos/carrinho_fable_5.html',
     capa: 'capas/carrinho_fable_5.png',
-    titulo: 'Carrinho 3D — Você × IA na caça às moedas',
+    titulo: 'Jogo do Carrinho',
     descricao: 'Um jogo 3D completo onde você compete contra a IA para coletar moedas. Com A*, splines, leque adaptativo e voo livre.',
     modelo: 'Claude Fable 5',
     sigla: 'F5',
@@ -623,6 +634,7 @@ for (const g of GAMES.slice(0,4)) {
   a.href = g.arquivo;
   a.innerHTML = `
     <div class="thumb">
+      <span class="thumb-modelo">${esc(g.modelo)}</span>
       <img src="${esc(g.capa)}" alt="Capa de ${esc(g.titulo)}" loading="lazy">
       <span class="play-btn">▶</span>
       <span class="selo">${esc(g.selo)}</span>
@@ -665,6 +677,7 @@ for (const g of GAMES) {
   a.href = g.arquivo;
   a.innerHTML = `
     <div class="thumb">
+      <span class="thumb-modelo">${esc(g.modelo)}</span>
       <img src="${esc(g.capa)}" alt="Capa de ${esc(g.titulo)}" loading="lazy">
       <div class="thumb-overlay">
         <div class="thumb-tags">${tagsHtml}</div>
